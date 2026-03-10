@@ -54,9 +54,12 @@ export default function AboutPage() {
 
           <p className="text-stone-500 text-sm">
             <span className="font-medium text-stone-600">Privacy:</span> If
-            you upload a photo or type a description, it gets sent to Anthropic's
-            Claude for analysis. We don't store your photos, descriptions, or
-            results. Nothing is saved after you close the page.
+            you upload a photo or type a description, it gets sent to
+            Anthropic&apos;s Claude for analysis. We don&apos;t store your photos,
+            descriptions, or results. Your offset jar (just a running dollar
+            total and meal count &mdash; no meal details) is saved in your
+            browser&apos;s local storage so it persists between visits. You can
+            clear it anytime. Nothing is ever sent to our servers.
           </p>
         </div>
 
