@@ -61,15 +61,26 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                // Iframe height sync
+                // Iframe height sync — paused during onboarding so
+                // position:fixed modal works within the default iframe viewport
                 if (window.parent !== window) {
+                  var onboardingDone = false;
+                  try { onboardingDone = localStorage.getItem('plate2offset_onboarding_done') === 'true'; } catch(e) {}
+
                   function postHeight() {
                     var h = document.documentElement.scrollHeight;
                     window.parent.postMessage({ type: 'plate2offset-height', height: h }, '*');
                   }
-                  var ro = new ResizeObserver(postHeight);
-                  ro.observe(document.documentElement);
-                  postHeight();
+                  function startSync() {
+                    var ro = new ResizeObserver(postHeight);
+                    ro.observe(document.documentElement);
+                    postHeight();
+                  }
+                  if (onboardingDone) {
+                    startSync();
+                  } else {
+                    window.addEventListener('plate2offset:onboarding-done', startSync, { once: true });
+                  }
                 }
                 // Register service worker (production only) or unregister in dev
                 if ('serviceWorker' in navigator) {

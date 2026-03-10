@@ -5,7 +5,7 @@
  * Shows once, tracked via localStorage flag.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const ONBOARDING_KEY = "plate2offset_onboarding_done";
 
@@ -29,23 +29,27 @@ const STEPS = [
 
 export default function OnboardingFlow() {
   const [step, setStep] = useState(0);
-  const [show, setShow] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(ONBOARDING_KEY) !== "true";
-  });
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem(ONBOARDING_KEY) !== "true") {
+      setShow(true); // eslint-disable-line react-hooks/set-state-in-effect -- read from localStorage on mount
+    }
+  }, []);
+
+  function handleDismiss() {
+    localStorage.setItem(ONBOARDING_KEY, "true");
+    setShow(false);
+    // Signal to iframe height sync that it can start resizing
+    window.dispatchEvent(new Event("plate2offset:onboarding-done"));
+  }
 
   function handleNext() {
     if (step < STEPS.length - 1) {
       setStep(step + 1);
     } else {
-      localStorage.setItem(ONBOARDING_KEY, "true");
-      setShow(false);
+      handleDismiss();
     }
-  }
-
-  function handleSkip() {
-    localStorage.setItem(ONBOARDING_KEY, "true");
-    setShow(false);
   }
 
   if (!show) return null;
@@ -83,7 +87,7 @@ export default function OnboardingFlow() {
           </button>
           {step < STEPS.length - 1 && (
             <button
-              onClick={handleSkip}
+              onClick={handleDismiss}
               className="py-3 px-4 text-sm text-stone-400 hover:text-stone-600 transition"
             >
               Skip
