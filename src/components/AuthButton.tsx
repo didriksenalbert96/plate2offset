@@ -5,22 +5,14 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 
+const hasSupabase = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 export default function AuthButton() {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [supabaseAvailable, setSupabaseAvailable] = useState(false);
+  const [loading, setLoading] = useState(hasSupabase);
 
   useEffect(() => {
-    // Check if Supabase env vars are configured
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
-      setLoading(false);
-      return;
-    }
-
-    setSupabaseAvailable(true);
+    if (!hasSupabase) return;
 
     const supabase = getSupabaseBrowserClient();
 
@@ -39,7 +31,7 @@ export default function AuthButton() {
   }, []);
 
   // Don't render anything if Supabase isn't configured or still loading
-  if (!supabaseAvailable || loading) return null;
+  if (!hasSupabase || loading) return null;
 
   if (user) {
     return (

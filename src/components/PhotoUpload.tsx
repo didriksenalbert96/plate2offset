@@ -85,6 +85,7 @@ export default function PhotoUpload({ photoBase64, onPhotoChange }: PhotoUploadP
 
       {photoBase64 ? (
         <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element -- base64 data URL, next/image adds no value */}
           <img
             src={photoBase64}
             alt="Your meal"

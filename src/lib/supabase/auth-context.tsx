@@ -20,19 +20,14 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+const hasSupabase = !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(hasSupabase);
 
   useEffect(() => {
-    // If Supabase isn't configured, skip auth entirely
-    if (
-      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    ) {
-      setLoading(false);
-      return;
-    }
+    if (!hasSupabase) return;
 
     const supabase = getSupabaseBrowserClient();
 

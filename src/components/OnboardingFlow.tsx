@@ -5,7 +5,7 @@
  * Shows once, tracked via localStorage flag.
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const ONBOARDING_KEY = "plate2offset_onboarding_done";
 
@@ -29,14 +29,10 @@ const STEPS = [
 
 export default function OnboardingFlow() {
   const [step, setStep] = useState(0);
-  const [show, setShow] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (localStorage.getItem(ONBOARDING_KEY) !== "true") {
-      setShow(true);
-    }
-  }, []);
+  const [show, setShow] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(ONBOARDING_KEY) !== "true";
+  });
 
   function handleNext() {
     if (step < STEPS.length - 1) {

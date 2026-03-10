@@ -14,26 +14,25 @@ interface AchievementToastProps {
 }
 
 export default function AchievementToast({ achievements }: AchievementToastProps) {
-  const [visible, setVisible] = useState(false);
-  const [current, setCurrent] = useState<Achievement | null>(null);
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+
+  // Derive current from props — first achievement not yet hidden
+  const current = achievements.find((a) => !hiddenKeys.has(a.key)) ?? null;
+  const currentKey = current?.key ?? null;
 
   useEffect(() => {
-    if (achievements.length === 0) return;
+    if (!currentKey) return;
 
-    // Show the first new achievement
-    setCurrent(achievements[0]);
-    setVisible(true);
     haptic("success");
-
-    // Mark all as seen
     markAchievementsSeen(achievements.map((a) => a.key));
 
-    // Auto-hide after 4 seconds
-    const timer = setTimeout(() => setVisible(false), 4000);
+    const timer = setTimeout(() => {
+      setHiddenKeys((prev) => new Set([...prev, currentKey]));
+    }, 4000);
     return () => clearTimeout(timer);
-  }, [achievements]);
+  }, [currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!visible || !current) return null;
+  if (!current) return null;
 
   return (
     <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 animate-bounce-in">
@@ -46,7 +45,7 @@ export default function AchievementToast({ achievements }: AchievementToastProps
           <p className="text-xs text-stone-500">{current.description}</p>
         </div>
         <button
-          onClick={() => setVisible(false)}
+          onClick={() => setHiddenKeys((prev) => new Set([...prev, current.key]))}
           className="ml-auto text-stone-300 hover:text-stone-500 text-lg leading-none"
         >
           &times;

@@ -89,7 +89,6 @@ export default function Home() {
     }
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hasInput = description.trim().length > 0 || photoBase64 !== null;

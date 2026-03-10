@@ -12,7 +12,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { getSupabaseBrowserClient } from "./client";
-import { getHistory, type MealEntry } from "../meal-history";
+import { type MealEntry } from "../meal-history";
 import { getJar } from "../offset-jar";
 import { getDonationSettings } from "../donation-settings";
 import type { MealItem } from "../types";
@@ -270,7 +270,9 @@ async function pullFromSupabase(userId: string): Promise<void> {
  */
 export function useSync(user: User | null) {
   const userRef = useRef(user);
-  userRef.current = user;
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const processQueue = useCallback(async () => {
     if (!userRef.current) return;

@@ -1,25 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
+
+function subscribe(callback: () => void) {
+  window.addEventListener("online", callback);
+  window.addEventListener("offline", callback);
+  return () => {
+    window.removeEventListener("online", callback);
+    window.removeEventListener("offline", callback);
+  };
+}
+
+function getSnapshot() {
+  return !navigator.onLine;
+}
+
+function getServerSnapshot() {
+  return false;
+}
 
 export default function OfflineBanner() {
-  const [offline, setOffline] = useState(false);
-
-  useEffect(() => {
-    // Set real value after hydration
-    setOffline(!navigator.onLine);
-
-    function handleOnline() { setOffline(false); }
-    function handleOffline() { setOffline(true); }
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  const offline = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   if (!offline) return null;
 

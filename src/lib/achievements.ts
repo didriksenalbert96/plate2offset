@@ -32,7 +32,7 @@ interface AchievementInput {
  * Get all achievements with their earned status.
  */
 export function getAchievements(input: AchievementInput): Achievement[] {
-  const { totalMeals, currentStreak, longestStreak, totalCents, entries, challengeCompleted } = input;
+  const { totalMeals, longestStreak, totalCents, entries, challengeCompleted } = input;
 
   // Unique categories logged
   const categories = new Set<Category>();

@@ -9,7 +9,8 @@ import JoinGroupModal from "@/components/JoinGroupModal";
 export default function GroupsPage() {
   const { user, loading: authLoading, isAuthenticated } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const loading = !!user && !dataLoaded;
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -17,15 +18,14 @@ export default function GroupsPage() {
 
   const loadGroups = useCallback(async () => {
     if (!user) return;
-    setLoading(true);
     const userGroups = await getUserGroups(user.id);
     setGroups(userGroups);
-    setLoading(false);
+    setDataLoaded(true);
   }, [user]);
 
   useEffect(() => {
-    if (user) loadGroups();
-    else setLoading(false);
+    if (user) loadGroups(); // eslint-disable-line react-hooks/set-state-in-effect -- async data fetch
+    else setDataLoaded(true);
   }, [user, loadGroups]);
 
   async function handleCreate(e: React.FormEvent) {

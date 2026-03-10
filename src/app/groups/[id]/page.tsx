@@ -32,14 +32,13 @@ export default function GroupDetailPage() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [leaderboard, setLeaderboard] = useState<GroupLeaderboardEntry[]>([]);
   const [stats, setStats] = useState<GroupStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const loading = !!user && !dataLoaded;
   const [showInviteCode, setShowInviteCode] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user || !groupId) return;
-
-    setLoading(true);
 
     // Fetch group info
     const supabase = getSupabaseBrowserClient();
@@ -63,12 +62,12 @@ export default function GroupDetailPage() {
     setMembers(membersData);
     setLeaderboard(leaderboardData);
     setStats(statsData);
-    setLoading(false);
+    setDataLoaded(true);
   }, [user, groupId]);
 
   useEffect(() => {
-    if (user) loadData();
-    else setLoading(false);
+    if (user) loadData(); // eslint-disable-line react-hooks/set-state-in-effect -- async data fetch
+    else setDataLoaded(true);
   }, [user, loadData]);
 
   async function handleLeave() {

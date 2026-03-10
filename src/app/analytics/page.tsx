@@ -17,7 +17,6 @@ import {
   getAnnualSummary,
   getAvgOffsetPerMeal,
   type PeriodTotal,
-  type AnnualSummary as AnnualSummaryType,
 } from "@/lib/analytics";
 import TrendChart, { Sparkline } from "@/components/TrendChart";
 import ImpactEquivalents from "@/components/ImpactEquivalents";
