@@ -9,6 +9,7 @@
 import type { MealItem, Category } from "./types";
 import { CENTS_PER_GRAM } from "./coefficients";
 import { toGrams } from "./calculate-offset";
+import { ONE_DAY, CATEGORY_LABELS } from "./constants";
 
 const STORAGE_KEY = "plate2offset_history";
 const MAX_MEALS = 500; // keep history manageable
@@ -33,16 +34,6 @@ export interface StreakInfo {
   totalMeals: number;
   totalDays: number;
 }
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  "red-meat": "Red meat",
-  pork: "Pork",
-  poultry: "Poultry",
-  "fish-seafood": "Fish & seafood",
-  eggs: "Eggs",
-  dairy: "Dairy",
-  other: "Plant-based",
-};
 
 function readHistory(): MealEntry[] {
   if (typeof window === "undefined") return [];
@@ -143,7 +134,6 @@ export function getStreakInfo(entries: MealEntry[]): StreakInfo {
     })
     .sort((a, b) => b - a); // newest first
 
-  const ONE_DAY = 86400000;
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
 

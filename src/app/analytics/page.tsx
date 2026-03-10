@@ -21,24 +21,7 @@ import {
 import TrendChart, { Sparkline } from "@/components/TrendChart";
 import ImpactEquivalents from "@/components/ImpactEquivalents";
 import AnnualSummary from "@/components/AnnualSummary";
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "red-meat": "bg-red-500",
-  pork: "bg-pink-400",
-  poultry: "bg-orange-400",
-  "fish-seafood": "bg-blue-400",
-  eggs: "bg-yellow-400",
-  dairy: "bg-sky-300",
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  "red-meat": "Red meat",
-  pork: "Pork",
-  poultry: "Poultry",
-  "fish-seafood": "Fish & seafood",
-  eggs: "Eggs",
-  dairy: "Dairy",
-};
+import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/constants";
 
 type TimeRange = "weekly" | "monthly";
 
@@ -198,7 +181,7 @@ export default function AnalyticsPage() {
                             key={cat}
                             className={`${CATEGORY_COLORS[cat] ?? "bg-stone-300"} transition-all`}
                             style={{ width: `${(cents / total) * 100}%` }}
-                            title={`${CATEGORY_LABELS[cat] ?? cat}: $${(cents / 100).toFixed(2)}`}
+                            title={`${CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] ?? cat}: $${(cents / 100).toFixed(2)}`}
                           />
                         ))}
                       </div>
@@ -212,7 +195,7 @@ export default function AnalyticsPage() {
               {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
                 <div key={cat} className="flex items-center gap-1">
                   <div className={`h-2 w-2 rounded-full ${color}`} />
-                  <span className="text-stone-500">{CATEGORY_LABELS[cat]}</span>
+                  <span className="text-stone-500">{CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS]}</span>
                 </div>
               ))}
             </div>

@@ -10,15 +10,7 @@ import {
   getJar, estimateYearlyOffset,
 } from "@/lib/data-layer";
 import ShareCard from "@/components/ShareCard";
-
-const CATEGORY_COLORS: Record<string, string> = {
-  "red-meat": "bg-red-500",
-  pork: "bg-pink-400",
-  poultry: "bg-orange-400",
-  "fish-seafood": "bg-blue-400",
-  eggs: "bg-yellow-400",
-  dairy: "bg-sky-300",
-};
+import { CATEGORY_COLORS } from "@/lib/constants";
 
 const CATEGORY_TEXT_COLORS: Record<string, string> = {
   "red-meat": "text-red-700",

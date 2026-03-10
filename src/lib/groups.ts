@@ -54,7 +54,6 @@ export async function createGroup(name: string, userId: string): Promise<Group |
     .single();
 
   if (groupError || !group) {
-    console.error("Failed to create group:", groupError?.message);
     return null;
   }
 
@@ -64,7 +63,7 @@ export async function createGroup(name: string, userId: string): Promise<Group |
     .insert({ group_id: group.id, user_id: userId, role: "admin" });
 
   if (memberError) {
-    console.error("Failed to add creator to group:", memberError.message);
+    // Creator membership failed — group was still created
   }
 
   return group as Group;
@@ -105,7 +104,6 @@ export async function joinGroup(inviteCode: string, userId: string): Promise<Gro
     .insert({ group_id: group.id, user_id: userId, role: "member" });
 
   if (joinError) {
-    console.error("Failed to join group:", joinError.message);
     return null;
   }
 

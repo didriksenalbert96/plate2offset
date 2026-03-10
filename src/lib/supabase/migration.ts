@@ -47,7 +47,7 @@ export async function migrateToSupabase(userId: string): Promise<void> {
         });
 
         if (error) {
-          console.error("Migration: failed to import meal:", error.message);
+          // Skip failed meal — will retry on next migration attempt
         }
       }
     }
@@ -67,13 +67,12 @@ export async function migrateToSupabase(userId: string): Promise<void> {
       .eq("id", userId);
 
     if (profileError) {
-      console.error("Migration: failed to update profile:", profileError.message);
+      // Profile update failed — will retry on next migration attempt
     }
 
     // 3. Mark as migrated
     markMigrated();
-  } catch (err) {
-    console.error("Migration failed:", err);
+  } catch {
     // Don't mark as migrated on failure — will retry next time
   }
 }

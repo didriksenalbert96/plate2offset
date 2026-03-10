@@ -5,15 +5,7 @@
  */
 
 import type { AnnualSummary as AnnualSummaryType } from "@/lib/analytics";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  "red-meat": "Red meat",
-  pork: "Pork",
-  poultry: "Poultry",
-  "fish-seafood": "Fish & seafood",
-  eggs: "Eggs",
-  dairy: "Dairy",
-};
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export default function AnnualSummary({ summary }: { summary: AnnualSummaryType }) {
   const dollars = (summary.totalCents / 100).toFixed(2);

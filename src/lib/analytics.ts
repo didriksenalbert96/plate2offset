@@ -8,6 +8,7 @@
 import type { MealEntry, CategoryBreakdown } from "./meal-history";
 import { getCategoryBreakdown } from "./meal-history";
 import type { Category } from "./types";
+import { ONE_DAY } from "./constants";
 
 export interface PeriodTotal {
   /** Period label, e.g. "Mar 3" or "Feb 2026" */
@@ -30,8 +31,6 @@ export interface AnnualSummary {
   longestStreak: number;
   totalDays: number;
 }
-
-const ONE_DAY = 86400000;
 
 /** Get the start of day (local timezone) for a timestamp. */
 function dayStart(ts: number): number {

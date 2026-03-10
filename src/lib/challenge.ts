@@ -5,6 +5,7 @@
  */
 
 import { getHistory } from "./meal-history";
+import { ONE_DAY } from "./constants";
 
 const STORAGE_KEY = "plate2offset_challenge";
 
@@ -76,7 +77,6 @@ export function getChallengeProgress(): ChallengeProgress | null {
 
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const ONE_DAY = 86400000;
   const totalDays = Math.min(30, Math.floor((today - startDay) / ONE_DAY) + 1);
 
   // Count meals per day since challenge started
