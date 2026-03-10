@@ -61,18 +61,22 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                // Iframe detection — add class to prevent 100vh feedback loop
+                // Iframe setup — inject CSS to kill 100vh feedback loop,
+                // then sync height to parent via postMessage
                 if (window.parent !== window) {
-                  document.documentElement.classList.add('in-iframe');
-                }
-                // Iframe height sync — paused during onboarding so
-                // position:fixed modal works within the default iframe viewport
-                if (window.parent !== window) {
+                  // Inject style dynamically (bypasses PostCSS/Tailwind processing)
+                  var s = document.createElement('style');
+                  s.textContent = '[class*="min-h-screen"]{min-height:0!important}';
+                  document.head.appendChild(s);
+
                   var onboardingDone = false;
                   try { onboardingDone = localStorage.getItem('plate2offset_onboarding_done') === 'true'; } catch(e) {}
 
+                  var lastH = 0;
                   function postHeight() {
                     var h = document.documentElement.scrollHeight;
+                    if (Math.abs(h - lastH) < 2) return;
+                    lastH = h;
                     window.parent.postMessage({ type: 'plate2offset-height', height: h }, '*');
                   }
                   function startSync() {
