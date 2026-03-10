@@ -101,10 +101,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No response from AI." }, { status: 500 });
     }
 
-    const result: AnalyzeResponse = JSON.parse(textBlock.text);
+    // Strip markdown code fences if Claude wraps the JSON in them
+    let jsonText = textBlock.text.trim();
+    if (jsonText.startsWith("```")) {
+      jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+    const result: AnalyzeResponse = JSON.parse(jsonText);
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Anthropic API error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Anthropic API error:", message);
     return NextResponse.json(
       { error: "Something went wrong analyzing your meal. Please try again." },
       { status: 500 }
