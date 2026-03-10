@@ -54,8 +54,8 @@ export default function AboutPage() {
 
           <p className="text-stone-500 text-sm">
             <span className="font-medium text-stone-600">Privacy:</span> If
-            you upload a photo or type a description, it gets sent to OpenAI
-            for analysis. We don't store your photos, descriptions, or
+            you upload a photo or type a description, it gets sent to Anthropic's
+            Claude for analysis. We don't store your photos, descriptions, or
             results. Nothing is saved after you close the page.
           </p>
         </div>

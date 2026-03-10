@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import type { AnalyzeResponse } from "@/lib/types";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-/**
- * The system prompt tells the AI what we want:
- * - Identify animal-product ingredients in a meal
- * - Return structured JSON matching our AnalyzeResponse type
- * - Be honest when uncertain (set low confidence)
- */
 const SYSTEM_PROMPT = `You are a meal ingredient analyzer. Given a meal description or photo, identify ALL ingredients you can see or infer.
 
 For each ingredient, return:
@@ -37,14 +31,15 @@ Always respond with valid JSON matching this exact structure:
       "confidence": number
     }
   ],
-  "note": "optional string"
-}`;
+  "note": "optional string or null"
+}
+
+Respond ONLY with the JSON object. No other text.`;
 
 export async function POST(request: NextRequest) {
-  // Check that the API key is configured
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
-      { error: "OpenAI API key is not configured. Add OPENAI_API_KEY to your .env.local file." },
+      { error: "Anthropic API key is not configured. Add ANTHROPIC_API_KEY to your .env.local file." },
       { status: 500 }
     );
   }
@@ -55,7 +50,6 @@ export async function POST(request: NextRequest) {
     photoBase64?: string;
   };
 
-  // Must have at least one input
   if (!description && !photoBase64) {
     return NextResponse.json(
       { error: "Please provide a meal description or photo." },
@@ -63,90 +57,54 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Build the message content — either text, image, or both
-  const userContent: OpenAI.Responses.ResponseInputContent[] = [];
+  // Build the message content
+  const userContent: Anthropic.MessageCreateParams["messages"][0]["content"] = [];
 
   if (photoBase64) {
-    userContent.push({
-      type: "input_image",
-      image_url: photoBase64,
-      detail: "auto",
-    });
+    // photoBase64 is a data URL like "data:image/jpeg;base64,/9j/4AAQ..."
+    // Claude needs the base64 data and media type separately
+    const match = photoBase64.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (match) {
+      userContent.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+          data: match[2],
+        },
+      });
+    }
   }
 
   if (description) {
     userContent.push({
-      type: "input_text",
+      type: "text",
       text: `Meal description: ${description}`,
     });
   } else if (photoBase64) {
     userContent.push({
-      type: "input_text",
+      type: "text",
       text: "Analyze ALL ingredients in this meal photo, including plant-based items.",
     });
   }
 
   try {
-    const response = await openai.responses.create({
-      model: photoBase64 ? "gpt-4o" : "gpt-4o-mini",
-      store: false,
-      input: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-      text: {
-        format: {
-          type: "json_schema",
-          name: "analyze_meal",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              items: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    name: { type: "string" },
-                    category: {
-                      type: "string",
-                      enum: ["red-meat", "poultry", "pork", "fish-seafood", "dairy", "eggs", "other"],
-                    },
-                    amount: { type: "number" },
-                    unit: {
-                      type: "string",
-                      enum: ["g", "oz", "ml", "cups", "pieces", "servings"],
-                    },
-                    confidence: { type: "number" },
-                  },
-                  required: ["name", "category", "amount", "unit", "confidence"],
-                  additionalProperties: false,
-                },
-              },
-              note: { type: ["string", "null"] },
-            },
-            required: ["items", "note"],
-            additionalProperties: false,
-          },
-        },
-      },
+    const response = await anthropic.messages.create({
+      model: photoBase64 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userContent }],
     });
 
-    // Extract the text from the response
-    const textOutput = response.output.find((o) => o.type === "message");
-    if (!textOutput || textOutput.type !== "message") {
+    const textBlock = response.content.find((block) => block.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json({ error: "No response from AI." }, { status: 500 });
     }
 
-    const textContent = textOutput.content.find((c) => c.type === "output_text");
-    if (!textContent || textContent.type !== "output_text") {
-      return NextResponse.json({ error: "No text in AI response." }, { status: 500 });
-    }
-
-    const result: AnalyzeResponse = JSON.parse(textContent.text);
+    const result: AnalyzeResponse = JSON.parse(textBlock.text);
     return NextResponse.json(result);
   } catch (err) {
-    console.error("OpenAI API error:", err);
+    console.error("Anthropic API error:", err);
     return NextResponse.json(
       { error: "Something went wrong analyzing your meal. Please try again." },
       { status: 500 }
