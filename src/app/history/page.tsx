@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   getHistory,
@@ -37,16 +37,11 @@ const CATEGORY_TEXT_COLORS: Record<string, string> = {
 };
 
 export default function HistoryPage() {
-  const [entries, setEntries] = useState<MealEntry[]>([]);
-  const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>([]);
-  const [streak, setStreak] = useState<StreakInfo>({
-    currentStreak: 0,
-    longestStreak: 0,
-    totalMeals: 0,
-    totalDays: 0,
-  });
+  const [entries, setEntries] = useState<MealEntry[]>(() => getHistory());
+  const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>(() => getCategoryBreakdown(getHistory()));
+  const [streak, setStreak] = useState<StreakInfo>(() => getStreakInfo(getHistory()));
   const [confirmClear, setConfirmClear] = useState(false);
-  const [challenge, setChallenge] = useState<ChallengeProgress | null>(null);
+  const [challenge, setChallenge] = useState<ChallengeProgress | null>(() => getChallengeProgress());
   const [showShareCard, setShowShareCard] = useState(false);
 
   function reload() {
@@ -56,10 +51,6 @@ export default function HistoryPage() {
     setStreak(getStreakInfo(h));
     setChallenge(getChallengeProgress());
   }
-
-  useEffect(() => {
-    reload();
-  }, []);
 
   function handleDelete(id: string) {
     deleteMeal(id);

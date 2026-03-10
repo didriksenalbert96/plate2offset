@@ -4,7 +4,7 @@
  * Uses meal history + meals-per-day preference to determine daily completion.
  */
 
-import { getHistory, type MealEntry } from "./meal-history";
+import { getHistory } from "./meal-history";
 
 const STORAGE_KEY = "plate2offset_challenge";
 

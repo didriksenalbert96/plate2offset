@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { haptic } from "@/lib/haptic";
 
 interface DonateModalProps {
@@ -24,11 +24,10 @@ export default function DonateModal({
   onDonationComplete,
 }: DonateModalProps) {
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [isLocal, setIsLocal] = useState(false);
-
-  useEffect(() => {
-    setIsLocal(location.hostname === "localhost" || location.hostname === "127.0.0.1");
-  }, []);
+  const [isLocal] = useState(() =>
+    typeof window !== "undefined" &&
+    (location.hostname === "localhost" || location.hostname === "127.0.0.1")
+  );
 
   const embedUrl = `https://www.every.org/farmkind/donate?amount=${amount.toFixed(2)}&frequency=${frequency}#/donate`;
 

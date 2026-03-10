@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { haptic } from "@/lib/haptic";
 
 const IMAGE_MAX_SIZE = 768;
@@ -55,15 +55,12 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
 
 /** Detect if we're on a mobile device (for showing camera button). */
 function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    // Check for touch support and small screen as a proxy for mobile
-    const mobile =
-      "ontouchstart" in window ||
+  const [isMobile] = useState(() =>
+    typeof window !== "undefined" &&
+    ("ontouchstart" in window ||
       navigator.maxTouchPoints > 0 ||
-      window.innerWidth < 768;
-    setIsMobile(mobile);
-  }, []);
+      window.innerWidth < 768)
+  );
   return isMobile;
 }
 

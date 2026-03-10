@@ -31,36 +31,25 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [donationAmount, setDonationAmount] = useState(0);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [jar, setJar] = useState<JarState>({ totalCents: 0, mealCount: 0, mealsPerDay: 3 });
-  const [historyCount, setHistoryCount] = useState(0);
-  const [offlineQueue, setOfflineQueue] = useState<QueuedMeal[]>([]);
+  const [jar, setJar] = useState<JarState>(() => getJar());
+  const [historyCount, setHistoryCount] = useState(() => getHistory().length);
+  const [offlineQueue, setOfflineQueue] = useState<QueuedMeal[]>(() => getQueue());
   const [processingQueue, setProcessingQueue] = useState(false);
 
   // Donation settings
-  const [donationSettings, setDonationSettingsState] = useState<DonationSettings>({ autoThresholdCents: 0, subscriptionMode: false });
+  const [donationSettings, setDonationSettingsState] = useState<DonationSettings>(() => getDonationSettings());
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   // Recurring meals
-  const [recurringMeals, setRecurringMeals] = useState<RecurringMeal[]>([]);
-  const [lastMeal, setLastMealState] = useState<RecurringMeal | null>(null);
+  const [recurringMeals, setRecurringMeals] = useState<RecurringMeal[]>(() => getRecurringMeals());
+  const [lastMeal, setLastMealState] = useState<RecurringMeal | null>(() => getLastMeal());
 
   // Challenge
-  const [challenge, setChallenge] = useState<ChallengeProgress | null>(null);
+  const [challenge, setChallenge] = useState<ChallengeProgress | null>(() => getChallengeProgress());
 
   // Error recovery — keep photo/description on failure for retry
   const [canRetry, setCanRetry] = useState(false);
-
-  // Load all persisted state on mount
-  useEffect(() => {
-    setJar(getJar());
-    setHistoryCount(getHistory().length);
-    setOfflineQueue(getQueue());
-    setDonationSettingsState(getDonationSettings());
-    setRecurringMeals(getRecurringMeals());
-    setLastMealState(getLastMeal());
-    setChallenge(getChallengeProgress());
-  }, []);
 
   // When coming back online, process queued meals
   useEffect(() => {
@@ -94,7 +83,6 @@ export default function Home() {
     }
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hasInput = description.trim().length > 0 || photoBase64 !== null;

@@ -13,13 +13,13 @@ export default function AboutPage() {
         <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200 space-y-4 text-stone-700 text-[15px] leading-relaxed">
           <p>
             Most of us eat animal products without thinking much about it.
-            We're not here to guilt anyone. It's what we grew up with, it's
+            We&apos;re not here to guilt anyone. It&apos;s what we grew up with, it&apos;s
             tradition, and old habits run deep.
           </p>
 
           <p>
             But animal farming does cause a lot of suffering. So we built
-            a tool: tell us what you ate, and we'll suggest a small
+            a tool: tell us what you ate, and we&apos;ll suggest a small
             donation to help farmed animals through{" "}
             <a
               href="https://www.farmkind.giving"
@@ -36,20 +36,20 @@ export default function AboutPage() {
           <p>
             Think of it like a carbon offset, but for animals. You eat a
             chicken sandwich, you chip in a few cents to help chickens
-            somewhere else. It won't undo what happened, but it tips the
+            somewhere else. It won&apos;t undo what happened, but it tips the
             scales a little.
           </p>
 
           <p>
             The suggested amounts are rough estimates based on the type and
-            quantity of animal products in your meal. They're not an exact
+            quantity of animal products in your meal. They&apos;re not an exact
             science, but every bit helps, and the more you give, the better
             the world gets for animals.
           </p>
 
           <p className="text-stone-500 text-sm">
             Plate2Offset is not affiliated with FarmKind or Every.org.
-            Donations go directly to FarmKind through Every.org's platform.
+            Donations go directly to FarmKind through Every.org&apos;s platform.
           </p>
 
           <p className="text-stone-500 text-sm">

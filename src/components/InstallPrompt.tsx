@@ -16,23 +16,18 @@ interface BeforeInstallPromptEvent extends Event {
 
 export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return !!localStorage.getItem("plate2offset_install_dismissed");
+    } catch { return false; }
+  });
+  const [isStandalone] = useState(() =>
+    typeof window !== "undefined" &&
+    !!(window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in navigator && (navigator as unknown as { standalone: boolean }).standalone))
+  );
 
   useEffect(() => {
-    // Check if already installed as PWA
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      ("standalone" in navigator && (navigator as unknown as { standalone: boolean }).standalone);
-    setIsStandalone(!!standalone);
-
-    // Check if previously dismissed
-    try {
-      if (localStorage.getItem("plate2offset_install_dismissed")) {
-        setDismissed(true);
-      }
-    } catch { /* ignore */ }
-
     function handlePrompt(e: Event) {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
