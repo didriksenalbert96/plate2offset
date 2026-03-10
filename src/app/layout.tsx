@@ -61,6 +61,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
+                // Iframe detection — add class to prevent 100vh feedback loop
+                if (window.parent !== window) {
+                  document.documentElement.classList.add('in-iframe');
+                }
                 // Iframe height sync — paused during onboarding so
                 // position:fixed modal works within the default iframe viewport
                 if (window.parent !== window) {

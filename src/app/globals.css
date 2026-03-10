@@ -43,3 +43,10 @@ body {
 .animate-bounce-in {
   animation: bounce-in 0.4s ease-out;
 }
+
+/* When embedded in an iframe, disable min-h-screen (100vh) to prevent
+   a feedback loop: iframe resizes to scrollHeight → 100vh grows →
+   min-height grows → scrollHeight grows → infinite expansion. */
+html.in-iframe .min-h-screen {
+  min-height: 0px !important;
+}
