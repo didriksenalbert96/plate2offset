@@ -104,11 +104,11 @@ const ANALYZE_TOOL: Anthropic.Messages.Tool = {
   },
 };
 
-// ── Image hash cache (in-memory, avoids re-analyzing identical photos) ─
-const imageCache = new Map<string, AnalyzeResponse>();
-const IMAGE_CACHE_MAX = 50;
+// ── Result cache (in-memory, avoids re-analyzing identical inputs) ─────
+const resultCache = new Map<string, AnalyzeResponse>();
+const CACHE_MAX = 100;
 
-async function hashImage(data: string): Promise<string> {
+async function hashInput(data: string): Promise<string> {
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(data.slice(0, 5000)));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -153,14 +153,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check image cache
-  let imageHash: string | null = null;
-  if (photoBase64 && !description) {
-    imageHash = await hashImage(photoBase64);
-    const cached = imageCache.get(imageHash);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
+  // Check result cache (text descriptions and photo-only requests)
+  const cacheInput = description ?? photoBase64 ?? "";
+  const cacheKey = await hashInput(cacheInput);
+  const cached = resultCache.get(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
   }
 
   // Build the message content
@@ -206,8 +204,19 @@ export async function POST(request: NextRequest) {
     const response = await anthropic.messages.create({
       model: photoBase64 ? MODEL_IMAGE : MODEL_TEXT,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
-      tools: [ANALYZE_TOOL],
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      tools: [
+        {
+          ...ANALYZE_TOOL,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       tool_choice: { type: "tool", name: "report_meal_analysis" },
       messages: [{ role: "user", content: userContent }],
     });
@@ -225,15 +234,12 @@ export async function POST(request: NextRequest) {
 
     const result = toolBlock.input as AnalyzeResponse;
 
-    // Cache image results
-    if (imageHash) {
-      if (imageCache.size >= IMAGE_CACHE_MAX) {
-        // Evict oldest entry
-        const firstKey = imageCache.keys().next().value;
-        if (firstKey) imageCache.delete(firstKey);
-      }
-      imageCache.set(imageHash, result);
+    // Cache result for future identical requests
+    if (resultCache.size >= CACHE_MAX) {
+      const firstKey = resultCache.keys().next().value;
+      if (firstKey) resultCache.delete(firstKey);
     }
+    resultCache.set(cacheKey, result);
 
     return NextResponse.json(result);
   } catch (err) {
