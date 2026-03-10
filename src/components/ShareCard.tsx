@@ -10,11 +10,8 @@ interface ShareCardProps {
   monthLabel: string; // e.g. "March 2026"
 }
 
-/**
- * Generates a shareable impact card using Canvas API.
- * Share button uses Web Share API on mobile, or copies image on desktop.
- * Download button saves as PNG.
- */
+const APP_URL = "https://plate2offset.vercel.app";
+
 export default function ShareCard({
   totalMeals,
   totalOffsetDollars,
@@ -22,8 +19,10 @@ export default function ShareCard({
   monthLabel,
 }: ShareCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [generating, setGenerating] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const shareText = `I\u2019ve offset ${totalMeals} meal${totalMeals !== 1 ? "s" : ""} with Plate2Offset! $${totalOffsetDollars.toFixed(2)} donated to help farmed animals.`;
 
   function drawCard(): HTMLCanvasElement | null {
     const canvas = canvasRef.current;
@@ -100,7 +99,6 @@ export default function ShareCard({
     const statsY = 325;
     const colW = (W - 60) / 2;
 
-    // Donated
     ctx.font = "bold 26px system-ui, -apple-system, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.fillText(`$${totalOffsetDollars.toFixed(2)}`, 30 + colW / 2, statsY);
@@ -108,7 +106,6 @@ export default function ShareCard({
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     ctx.fillText("total donated", 30 + colW / 2, statsY + 22);
 
-    // Streak
     ctx.font = "bold 26px system-ui, -apple-system, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.fillText(
@@ -136,7 +133,6 @@ export default function ShareCard({
     return canvas;
   }
 
-  /** Draw a simplified scale/balance icon */
   function drawScaleLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, scale: number) {
     ctx.save();
     ctx.translate(cx, cy);
@@ -146,13 +142,11 @@ export default function ShareCard({
     ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
 
-    // Balance beam
     ctx.beginPath();
     ctx.moveTo(-28, -4);
     ctx.lineTo(28, -8);
     ctx.stroke();
 
-    // Fulcrum triangle
     ctx.beginPath();
     ctx.moveTo(0, -6);
     ctx.lineTo(-5, 6);
@@ -160,7 +154,6 @@ export default function ShareCard({
     ctx.closePath();
     ctx.fill();
 
-    // Base
     ctx.beginPath();
     ctx.moveTo(0, 6);
     ctx.lineTo(0, 14);
@@ -170,12 +163,10 @@ export default function ShareCard({
     ctx.lineTo(10, 14);
     ctx.stroke();
 
-    // Left plate (food side)
     ctx.beginPath();
     ctx.ellipse(-28, -4, 12, 4, 0, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Right plate (heart/offset side)
     ctx.beginPath();
     ctx.ellipse(28, -8, 12, 4, 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -183,54 +174,44 @@ export default function ShareCard({
     ctx.restore();
   }
 
-  async function getBlob(): Promise<Blob | null> {
-    const canvas = drawCard();
-    if (!canvas) return null;
-    return new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/png"),
-    );
-  }
-
   async function handleShare() {
-    setGenerating(true);
     haptic("light");
 
+    // Try native Web Share API first (mobile)
     try {
-      const blob = await getBlob();
-      if (!blob) { setGenerating(false); return; }
-
-      const file = new File([blob], "plate2offset-impact.png", { type: "image/png" });
-
-      // Try native Web Share API (mobile + some desktop browsers)
-      if (navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: "My Plate2Offset Impact",
-          text: `I\u2019ve offset ${totalMeals} meal${totalMeals !== 1 ? "s" : ""} with Plate2Offset!`,
-          files: [file],
-        });
-        haptic("success");
-        setGenerating(false);
-        return;
+      const canvas = drawCard();
+      if (canvas && navigator.share && navigator.canShare) {
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, "image/png"),
+        );
+        if (blob) {
+          const file = new File([blob], "plate2offset-impact.png", { type: "image/png" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: "My Plate2Offset Impact",
+              text: shareText,
+              files: [file],
+            });
+            haptic("success");
+            return;
+          }
+        }
       }
-
-      // Desktop fallback: copy image to clipboard
-      if (navigator.clipboard?.write) {
-        await navigator.clipboard.write([
-          new ClipboardItem({ "image/png": blob }),
-        ]);
-        haptic("success");
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-        setGenerating(false);
-        return;
-      }
-
-      // Final fallback: download
-      handleDownload();
     } catch {
-      // User cancelled or error — silently ignore
+      // User cancelled or not supported — fall through to menu
     }
-    setGenerating(false);
+
+    // Desktop / fallback: show social sharing menu
+    setShowShareMenu(true);
+  }
+
+  async function handleCopyText() {
+    try {
+      await navigator.clipboard.writeText(`${shareText} ${APP_URL}`);
+      haptic("success");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch { /* ignore */ }
   }
 
   function handleDownload() {
@@ -243,17 +224,17 @@ export default function ShareCard({
     a.href = url;
     a.download = "plate2offset-impact.png";
     a.click();
-    setGenerating(false);
   }
+
+  const encodedText = encodeURIComponent(shareText);
+  const encodedUrl = encodeURIComponent(APP_URL);
 
   return (
     <div className="space-y-3">
-      {/* Hidden canvas for rendering */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Preview card (CSS version) */}
+      {/* Preview card */}
       <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-6 text-center text-white shadow-lg">
-        {/* Scale icon */}
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40" className="mx-auto mb-1 h-8 w-14 opacity-80">
           <line x1="12" y1="18" x2="68" y2="14" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
           <polygon points="40,16 35,26 45,26" fill="white" />
@@ -286,23 +267,21 @@ export default function ShareCard({
         </div>
       </div>
 
+      {/* Share & save buttons */}
       <div className="flex gap-2">
         <button
           onClick={handleShare}
-          disabled={generating}
-          className="flex-1 flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="flex-1 flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
         >
-          {/* Share icon */}
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
             <path d="M13 4.5a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0zm0 11a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0zM2 10a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0zm10.036-4.04a.75.75 0 01-.036.14l-4.5 3a.75.75 0 01-.832-1.248l4.5-3a.75.75 0 011.018.258l-.15-.15zm-.068 8.08a.75.75 0 01.068-.14l.15-.15a.75.75 0 01-1.018.258l-4.5-3a.75.75 0 11.832-1.248l4.5 3a.75.75 0 01-.032.28z" />
           </svg>
-          {generating ? "Sharing..." : copied ? "Copied to clipboard!" : "Share"}
+          Share
         </button>
         <button
           onClick={handleDownload}
           className="flex items-center justify-center gap-2 rounded-full border border-stone-300 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-100"
         >
-          {/* Download icon */}
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
             <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
             <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
@@ -310,6 +289,148 @@ export default function ShareCard({
           Save
         </button>
       </div>
+
+      {/* Social sharing panel (desktop fallback) */}
+      {showShareMenu && (
+        <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-stone-700">Share on</p>
+            <button
+              onClick={() => setShowShareMenu(false)}
+              className="p-1 text-stone-400 hover:text-stone-600"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {/* X / Twitter */}
+            <a
+              href={`https://x.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-white">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">X</span>
+            </a>
+
+            {/* Facebook */}
+            <a
+              href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}&quote=${encodedText}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1877F2] text-white">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">Facebook</span>
+            </a>
+
+            {/* WhatsApp */}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${APP_URL}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366] text-white">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">WhatsApp</span>
+            </a>
+
+            {/* LinkedIn */}
+            <a
+              href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0A66C2] text-white">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">LinkedIn</span>
+            </a>
+
+            {/* Reddit */}
+            <a
+              href={`https://reddit.com/submit?url=${encodedUrl}&title=${encodedText}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FF4500] text-white">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+                  <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 0-.462.342.342 0 0 0-.461 0c-.545.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.206-.095z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">Reddit</span>
+            </a>
+
+            {/* Email */}
+            <a
+              href={`mailto:?subject=${encodeURIComponent("Check out Plate2Offset!")}&body=${encodeURIComponent(`${shareText}\n\n${APP_URL}`)}`}
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path d="M3 4a2 2 0 00-2 2v1.161l8.441 4.221a1.25 1.25 0 001.118 0L19 7.162V6a2 2 0 00-2-2H3z" />
+                  <path d="M19 8.839l-7.77 3.885a2.75 2.75 0 01-2.46 0L1 8.839V14a2 2 0 002 2h14a2 2 0 002-2V8.839z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">Email</span>
+            </a>
+
+            {/* Copy text */}
+            <button
+              onClick={handleCopyText}
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-stone-400 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path d="M7 3.5A1.5 1.5 0 018.5 2h3.879a1.5 1.5 0 011.06.44l3.122 3.12A1.5 1.5 0 0117 6.622V12.5a1.5 1.5 0 01-1.5 1.5h-1v-3.379a3 3 0 00-.879-2.121L10.5 5.379A3 3 0 008.379 4.5H7v-1z" />
+                  <path d="M4.5 6A1.5 1.5 0 003 7.5v9A1.5 1.5 0 004.5 18h7a1.5 1.5 0 001.5-1.5v-5.879a1.5 1.5 0 00-.44-1.06L9.44 6.44A1.5 1.5 0 008.378 6H4.5z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">
+                {copied ? "Copied!" : "Copy"}
+              </span>
+            </button>
+
+            {/* Save image */}
+            <button
+              onClick={handleDownload}
+              className="flex flex-col items-center gap-1.5 rounded-lg p-3 hover:bg-stone-50 transition-colors"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                  <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+                  <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+                </svg>
+              </div>
+              <span className="text-xs text-stone-600">Save</span>
+            </button>
+          </div>
+
+          <p className="text-xs text-stone-400 text-center">
+            Save the image first, then attach it to your post
+          </p>
+        </div>
+      )}
     </div>
   );
 }
