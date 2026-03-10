@@ -146,31 +146,35 @@ export default function ShareCard({
   async function handleShare() {
     haptic("light");
 
-    // Try native Web Share API first (mobile — shares image directly)
-    try {
-      const canvas = drawCard();
-      if (canvas && navigator.share && navigator.canShare) {
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, "image/png"),
-        );
-        if (blob) {
-          const file = new File([blob], "plate2offset-impact.png", { type: "image/png" });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              title: "My Plate2Offset Impact",
-              text: shareText,
-              files: [file],
-            });
-            haptic("success");
-            return;
+    // Use native Web Share API only on mobile/touch devices
+    const isMobile = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+
+    if (isMobile) {
+      try {
+        const canvas = drawCard();
+        if (canvas && navigator.share && navigator.canShare) {
+          const blob = await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, "image/png"),
+          );
+          if (blob) {
+            const file = new File([blob], "plate2offset-impact.png", { type: "image/png" });
+            if (navigator.canShare({ files: [file] })) {
+              await navigator.share({
+                title: "My Plate2Offset Impact",
+                text: shareText,
+                files: [file],
+              });
+              haptic("success");
+              return;
+            }
           }
         }
+      } catch {
+        // User cancelled or not supported
       }
-    } catch {
-      // User cancelled or not supported
     }
 
-    // Desktop fallback: show social sharing menu
+    // Desktop or fallback: show social sharing menu
     setShowShareMenu(true);
   }
 

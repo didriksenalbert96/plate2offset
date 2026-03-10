@@ -7,6 +7,8 @@
  */
 
 import type { MealItem, Category } from "./types";
+import { CENTS_PER_GRAM } from "./coefficients";
+import { toGrams } from "./calculate-offset";
 
 const STORAGE_KEY = "plate2offset_history";
 const MAX_MEALS = 500; // keep history manageable
@@ -117,25 +119,8 @@ export function getCategoryBreakdown(entries: MealEntry[]): CategoryBreakdown[] 
 
 /** Calculate cents contributed by a single item. */
 function itemCentsContribution(item: MealItem): number {
-  // Import would be circular, so inline the rates
-  const RATES: Record<string, number> = {
-    "red-meat": 0.10, pork: 0.07, poultry: 0.06,
-    "fish-seafood": 0.05, eggs: 0.04, dairy: 0.03, other: 0,
-  };
   const grams = toGrams(item.amount, item.unit);
-  return grams * (RATES[item.category] ?? 0);
-}
-
-function toGrams(amount: number, unit: string): number {
-  switch (unit) {
-    case "g": return amount;
-    case "oz": return amount * 28.35;
-    case "ml": return amount;
-    case "cups": return amount * 240;
-    case "pieces": return amount * 50;
-    case "servings": return amount * 100;
-    default: return amount;
-  }
+  return grams * (CENTS_PER_GRAM[item.category] ?? 0);
 }
 
 /** Calculate streak info from meal history. */

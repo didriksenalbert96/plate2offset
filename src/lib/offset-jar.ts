@@ -63,11 +63,6 @@ export function setMealsPerDay(mealsPerDay: number): JarState {
   return jar;
 }
 
-/** True if the jar total is at least 50 cents ($0.50). */
-export function isJarReady(): boolean {
-  return read().totalCents >= 50;
-}
-
 /**
  * Estimate the yearly offset based on the jar's average cents per meal
  * and the user's stated meals-per-day. Returns null if no meals logged.

@@ -2,6 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import OfflineBanner from "@/components/OfflineBanner";
+import Providers from "@/components/Providers";
+import AuthButton from "@/components/AuthButton";
+import BottomNav from "@/components/BottomNav";
+import OnboardingFlow from "@/components/OnboardingFlow";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,8 +46,17 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <OfflineBanner />
-        {children}
+        <Providers>
+          <OfflineBanner />
+          <div className="fixed top-2 right-3 z-50">
+            <AuthButton />
+          </div>
+          <div className="pb-16">
+            {children}
+          </div>
+          <BottomNav />
+          <OnboardingFlow />
+        </Providers>
         <script
           dangerouslySetInnerHTML={{
             __html: `

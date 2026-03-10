@@ -3,19 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  getHistory,
-  groupByDate,
-  getCategoryBreakdown,
-  getStreakInfo,
-  exportToCsv,
-  deleteMeal,
-  clearHistory,
-  type MealEntry,
-  type CategoryBreakdown,
-  type StreakInfo,
-} from "@/lib/meal-history";
-import { getChallengeProgress, startChallenge, stopChallenge, type ChallengeProgress } from "@/lib/challenge";
-import { getJar, estimateYearlyOffset } from "@/lib/offset-jar";
+  getHistory, groupByDate, getCategoryBreakdown, getStreakInfo,
+  exportToCsv, deleteMeal, clearHistory,
+  type MealEntry, type CategoryBreakdown, type StreakInfo,
+  getChallengeProgress, startChallenge, stopChallenge, type ChallengeProgress,
+  getJar, estimateYearlyOffset,
+} from "@/lib/data-layer";
 import ShareCard from "@/components/ShareCard";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -113,7 +106,9 @@ export default function HistoryPage() {
             &larr; Back
           </Link>
           <h1 className="text-xl font-bold text-stone-900">Meal History</h1>
-          <div className="w-12" /> {/* spacer */}
+          <Link href="/analytics" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
+            Analytics
+          </Link>
         </div>
 
         {/* Stats cards */}

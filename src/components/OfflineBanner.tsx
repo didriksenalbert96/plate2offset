@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 
 export default function OfflineBanner() {
-  const [offline, setOffline] = useState(() =>
-    typeof navigator !== "undefined" ? !navigator.onLine : false
-  );
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
+    // Set real value after hydration
+    setOffline(!navigator.onLine);
+
     function handleOnline() { setOffline(false); }
     function handleOffline() { setOffline(true); }
 

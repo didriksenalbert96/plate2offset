@@ -54,11 +54,6 @@ export function dequeue(id: string): void {
   writeQueue(queue);
 }
 
-export function clearQueue(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
-}
-
 export function isOnline(): boolean {
   if (typeof navigator === "undefined") return true;
   return navigator.onLine;

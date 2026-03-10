@@ -10,16 +10,20 @@ import type { MealItem } from "@/lib/types";
 import Link from "next/link";
 import { calculateOffset, itemContribution } from "@/lib/calculate-offset";
 import { buildDonateLink } from "@/lib/donate-link";
-import { getJar, addToJar, clearJar, setMealsPerDay, estimateYearlyOffset, type JarState } from "@/lib/offset-jar";
-import { addMeal, getHistory } from "@/lib/meal-history";
+import {
+  getJar, addToJar, clearJar, setMealsPerDay, estimateYearlyOffset, type JarState,
+  addMeal, getHistory, getStreakInfo,
+  enqueue, getQueue, dequeue, isOnline, type QueuedMeal,
+  getDonationSettings, setAutoThreshold, setSubscriptionMode, THRESHOLD_OPTIONS, type DonationSettings,
+  getRecurringMeals, getLastMeal, type RecurringMeal,
+  getChallengeProgress, type ChallengeProgress,
+} from "@/lib/data-layer";
 import { haptic } from "@/lib/haptic";
-import { enqueue, getQueue, dequeue, isOnline, type QueuedMeal } from "@/lib/offline-queue";
-import { getDonationSettings, setAutoThreshold, setSubscriptionMode, THRESHOLD_OPTIONS, type DonationSettings } from "@/lib/donation-settings";
-import { getRecurringMeals, getLastMeal, type RecurringMeal } from "@/lib/recurring-meals";
-import { getChallengeProgress, type ChallengeProgress } from "@/lib/challenge";
 import InstallPrompt from "@/components/InstallPrompt";
 import ShareCard from "@/components/ShareCard";
-import { getStreakInfo } from "@/lib/meal-history";
+import CommunityBanner from "@/components/CommunityBanner";
+import AchievementToast from "@/components/AchievementToast";
+import { getAchievements, getNewAchievements } from "@/lib/achievements";
 
 const MIN_DONATION = 0.5;
 
@@ -53,38 +57,39 @@ export default function Home() {
   // Error recovery — keep photo/description on failure for retry
   const [canRetry, setCanRetry] = useState(false);
 
+  // Process the next queued meal (shared by online listener and manual button)
+  async function processNextQueued() {
+    const queue = getQueue();
+    if (queue.length === 0 || !isOnline()) return;
+    setOfflineQueue(queue);
+    setProcessingQueue(true);
+    const item = queue[0];
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: item.description, photoBase64: item.photoBase64 }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.items);
+        dequeue(item.id);
+        setOfflineQueue(getQueue());
+        setStep("review");
+        haptic("success");
+      }
+    } catch { /* retry later */ }
+    setProcessingQueue(false);
+  }
+
   // When coming back online, process queued meals
   useEffect(() => {
     function handleOnline() {
-      const queue = getQueue();
-      if (queue.length > 0) {
-        setOfflineQueue(queue);
-        // Inline the processing to avoid hoisting issues
-        (async () => {
-          if (!isOnline()) return;
-          setProcessingQueue(true);
-          const item = queue[0];
-          try {
-            const res = await fetch("/api/analyze", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ description: item.description, photoBase64: item.photoBase64 }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              setItems(data.items);
-              dequeue(item.id);
-              setOfflineQueue(getQueue());
-              setStep("review");
-              haptic("success");
-            }
-          } catch { /* retry later */ }
-          setProcessingQueue(false);
-        })();
-      }
+      processNextQueued();
     }
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hasInput = description.trim().length > 0 || photoBase64 !== null;
@@ -353,27 +358,7 @@ export default function Home() {
               </p>
               {isOnline() && !processingQueue && (
                 <button
-                  onClick={async () => {
-                    if (offlineQueue.length === 0 || !isOnline()) return;
-                    setProcessingQueue(true);
-                    const item = offlineQueue[0];
-                    try {
-                      const res = await fetch("/api/analyze", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ description: item.description, photoBase64: item.photoBase64 }),
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setItems(data.items);
-                        dequeue(item.id);
-                        setOfflineQueue(getQueue());
-                        setStep("review");
-                        haptic("success");
-                      }
-                    } catch { /* retry later */ }
-                    setProcessingQueue(false);
-                  }}
+                  onClick={processNextQueued}
                   className="mt-1 text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900"
                 >
                   Process now
@@ -396,6 +381,8 @@ export default function Home() {
             </div>
           )}
 
+          <CommunityBanner />
+
           <button
             disabled={!hasInput && !canRetry}
             onClick={handleAnalyze}
@@ -404,15 +391,42 @@ export default function Home() {
             {!isOnline() && hasInput ? "Queue for later" : canRetry ? "Retry analysis" : "Analyze my meal"}
           </button>
 
+          <AchievementToast
+            achievements={getNewAchievements(
+              getAchievements({
+                totalMeals: historyCount,
+                currentStreak: getStreakInfo(getHistory()).currentStreak,
+                longestStreak: getStreakInfo(getHistory()).longestStreak,
+                totalCents: getHistory().reduce((s, e) => s + e.offsetCents, 0),
+                entries: getHistory(),
+                challengeCompleted: false,
+              })
+            )}
+          />
+
           <div className="flex items-center justify-center gap-4">
             {historyCount > 0 && (
-              <Link
-                href="/history"
-                className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
-              >
-                History ({historyCount})
-              </Link>
+              <>
+                <Link
+                  href="/history"
+                  className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
+                >
+                  History ({historyCount})
+                </Link>
+                <Link
+                  href="/analytics"
+                  className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
+                >
+                  Analytics
+                </Link>
+              </>
             )}
+            <Link
+              href="/groups"
+              className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
+            >
+              Groups
+            </Link>
             <Link
               href="/about"
               className="text-sm text-stone-400 underline underline-offset-2 hover:text-stone-600"

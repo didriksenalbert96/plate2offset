@@ -14,7 +14,7 @@ import type { MealItem } from "./types";
 import { CENTS_PER_GRAM } from "./coefficients";
 
 /** Rough conversion factors to grams. */
-function toGrams(amount: number, unit: string): number {
+export function toGrams(amount: number, unit: string): number {
   switch (unit) {
     case "g":
       return amount;
