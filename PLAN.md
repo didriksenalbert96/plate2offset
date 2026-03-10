@@ -131,7 +131,7 @@ as we build and test:
 
 | Decision | Options | Notes |
 |---|---|---|
-| **AI model** | `gpt-4o-mini` vs `gpt-4o` | Mini is cheaper & faster; full 4o is more accurate. Start with mini, upgrade if accuracy is poor. |
+| **AI model** | `gpt-4o-mini`, `gpt-4o`, Claude (`claude-sonnet`), Deepseek | **OpenAI gpt-4o-mini** is the starting choice — cheapest, fastest, and best-documented structured outputs + vision combo. **Claude** (Anthropic) is a strong alternative with good vision and JSON support; easy swap later. **Deepseek** is very cheap but has limited vision and less mature structured output tooling — riskier for a first project. The AI call lives in one file (`app/api/analyze/route.ts`) so switching models later is easy. |
 | **Image resize dimensions** | 512px, 768px, 1024px? | Smaller = cheaper API calls but less accurate. Need to test. |
 | **Coefficient calibration** | How many cents per gram of each product? | Needs research. Start with rough estimates, refine with user feedback. |
 | **Donation rounding** | Round to nearest $0.50? $1.00? Show exact cents? | UX decision — test what feels right. |

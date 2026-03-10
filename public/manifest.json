@@ -1,0 +1,17 @@
+{
+  "name": "Plate2Offset",
+  "short_name": "Plate2Offset",
+  "description": "Offset the impact of your meals on farmed animals with a small donation.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf9",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

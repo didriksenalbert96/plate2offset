@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#059669"/>
+  <!-- Plate -->
+  <ellipse cx="256" cy="270" rx="170" ry="70" fill="none" stroke="white" stroke-width="12" opacity="0.9"/>
+  <ellipse cx="256" cy="270" rx="110" ry="45" fill="none" stroke="white" stroke-width="8" opacity="0.5"/>
+  <!-- Fulcrum -->
+  <polygon points="256,340 228,400 284,400" fill="white" opacity="0.9"/>
+  <!-- Food side (left) -->
+  <ellipse cx="185" cy="255" rx="22" ry="14" fill="#fbbf24" transform="rotate(-15 185 255)"/>
+  <line x1="205" y1="248" x2="220" y2="238" stroke="#f59e0b" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="165" cy="260" rx="12" fill="#fbbf24"/>
+  <!-- Heart side (right) -->
+  <path d="M330 240c8-14 28-16 34-4s-2 26-34 42c-32-16-40-30-34-42s26-10 34 4z" fill="white" opacity="0.9"/>
+  <!-- Balance beam -->
+  <line x1="80" y1="268" x2="432" y2="252" stroke="white" stroke-width="10" stroke-linecap="round" opacity="0.8"/>
+  <!-- Base -->
+  <line x1="220" y1="400" x2="292" y2="400" stroke="white" stroke-width="12" stroke-linecap="round" opacity="0.9"/>
+</svg>
