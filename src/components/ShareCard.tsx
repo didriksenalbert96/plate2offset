@@ -24,12 +24,14 @@ export default function ShareCard({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const shareText = `I\u2019ve offset ${totalMeals} meal${totalMeals !== 1 ? "s" : ""} with Plate2Offset! $${totalOffsetDollars.toFixed(2)} donated to help farmed animals.`;
 
   function showToast(msg: string) {
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
+    toastTimeout.current = setTimeout(() => setToast(null), 3500);
   }
 
   function drawCard(): HTMLCanvasElement | null {
@@ -141,21 +143,6 @@ export default function ShareCard({
     ctx.restore();
   }
 
-  async function copyImageToClipboard(): Promise<boolean> {
-    try {
-      const canvas = drawCard();
-      if (!canvas || !navigator.clipboard?.write) return false;
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/png"),
-      );
-      if (!blob) return false;
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
   async function handleShare() {
     haptic("light");
 
@@ -187,17 +174,14 @@ export default function ShareCard({
     setShowShareMenu(true);
   }
 
-  /** Copy image + open social platform in new tab */
-  async function handleSocialClick(url: string) {
-    const copied = await copyImageToClipboard();
-    window.open(url, "_blank", "noopener,noreferrer");
-    if (copied) {
-      showToast("Image copied to clipboard \u2014 paste it in your post!");
-    } else {
-      // Fallback: auto-download the image
-      handleDownload();
-      showToast("Image saved \u2014 attach it to your post!");
-    }
+  /** Download image, then open social platform */
+  function handleSocialClick(url: string) {
+    handleDownload();
+    // Small delay so the download initiates before the new tab opens
+    setTimeout(() => {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }, 300);
+    showToast("Image saved \u2014 attach it to your post!");
     haptic("success");
   }
 
@@ -299,7 +283,7 @@ export default function ShareCard({
       {showShareMenu && (
         <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-stone-200 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-stone-700">Share on</p>
+            <p className="text-sm font-medium text-stone-700">Share your impact</p>
             <button
               onClick={() => setShowShareMenu(false)}
               className="p-1 text-stone-400 hover:text-stone-600"
