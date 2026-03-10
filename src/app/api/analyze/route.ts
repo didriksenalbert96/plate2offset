@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import type { AnalyzeResponse } from "@/lib/types";
 
 // Edge runtime — faster cold starts on Vercel
@@ -16,18 +18,35 @@ const ALLOWED_MEDIA_TYPES = new Set([
 ]);
 type AllowedMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
-// ── Rate limiting (simple in-memory, per-IP, resets on cold start) ────
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 10; // max requests per window
+// ── Rate limiting ─────────────────────────────────────────────────────
+// Uses Upstash Redis when configured (persistent across cold starts),
+// falls back to in-memory rate limiting for local development.
+const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+const ratelimit = upstashUrl && upstashToken
+  ? new Ratelimit({
+      redis: new Redis({ url: upstashUrl, token: upstashToken }),
+      limiter: Ratelimit.slidingWindow(10, "60 s"),
+      analytics: true,
+    })
+  : null;
+
+// In-memory fallback for local dev (no Redis needed)
 const requestLog = new Map<string, number[]>();
 
-function isRateLimited(ip: string): boolean {
+async function isRateLimited(ip: string): Promise<boolean> {
+  if (ratelimit) {
+    const { success } = await ratelimit.limit(ip);
+    return !success;
+  }
+  // Fallback: in-memory
   const now = Date.now();
   const timestamps = requestLog.get(ip) ?? [];
-  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  const recent = timestamps.filter((t) => now - t < 60_000);
   recent.push(now);
   requestLog.set(ip, recent);
-  return recent.length > RATE_LIMIT_MAX;
+  return recent.length > 10;
 }
 
 // ── System prompt (improved for multi-meal, restaurant, batch) ────────
@@ -133,7 +152,7 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     request.headers.get("x-real-ip") ??
     "unknown";
-  if (isRateLimited(ip)) {
+  if (await isRateLimited(ip)) {
     return NextResponse.json(
       { error: "Too many requests. Please wait a moment before trying again." },
       { status: 429 },
