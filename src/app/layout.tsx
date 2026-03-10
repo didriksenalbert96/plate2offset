@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import OfflineBanner from "@/components/OfflineBanner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -41,19 +42,35 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <OfflineBanner />
         {children}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                if (window.parent === window) return;
-                function postHeight() {
-                  var h = document.documentElement.scrollHeight;
-                  window.parent.postMessage({ type: 'plate2offset-height', height: h }, '*');
+                // Iframe height sync
+                if (window.parent !== window) {
+                  function postHeight() {
+                    var h = document.documentElement.scrollHeight;
+                    window.parent.postMessage({ type: 'plate2offset-height', height: h }, '*');
+                  }
+                  var ro = new ResizeObserver(postHeight);
+                  ro.observe(document.documentElement);
+                  postHeight();
                 }
-                var ro = new ResizeObserver(postHeight);
-                ro.observe(document.documentElement);
-                postHeight();
+                // Register service worker (production only) or unregister in dev
+                if ('serviceWorker' in navigator) {
+                  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                    navigator.serviceWorker.getRegistrations().then(function(regs) {
+                      regs.forEach(function(r) { r.unregister(); });
+                    });
+                    caches.keys().then(function(keys) {
+                      keys.forEach(function(k) { caches.delete(k); });
+                    });
+                  } else {
+                    navigator.serviceWorker.register('/sw.js').catch(function() {});
+                  }
+                }
               })();
             `,
           }}

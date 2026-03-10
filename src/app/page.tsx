@@ -5,19 +5,22 @@ import MealInput from "@/components/MealInput";
 import PhotoUpload from "@/components/PhotoUpload";
 import AnalyzingSpinner from "@/components/AnalyzingSpinner";
 import ReviewScreen from "@/components/ReviewScreen";
+import DonateModal from "@/components/DonateModal";
 import type { MealItem } from "@/lib/types";
 import Link from "next/link";
 import { calculateOffset, itemContribution } from "@/lib/calculate-offset";
 import { buildDonateLink } from "@/lib/donate-link";
 import { getJar, addToJar, clearJar, setMealsPerDay, estimateYearlyOffset, type JarState } from "@/lib/offset-jar";
+import { addMeal, getHistory } from "@/lib/meal-history";
+import { haptic } from "@/lib/haptic";
+import { enqueue, getQueue, dequeue, isOnline, type QueuedMeal } from "@/lib/offline-queue";
+import { getDonationSettings, setAutoThreshold, setSubscriptionMode, THRESHOLD_OPTIONS, type DonationSettings } from "@/lib/donation-settings";
+import { getRecurringMeals, getLastMeal, type RecurringMeal } from "@/lib/recurring-meals";
+import { getChallengeProgress, type ChallengeProgress } from "@/lib/challenge";
+import InstallPrompt from "@/components/InstallPrompt";
 
 const MIN_DONATION = 0.5;
 
-// The app has four screens, shown one at a time:
-//   "input"    → user types a description or uploads a photo
-//   "loading"  → spinner while AI analyzes
-//   "review"   → user sees & edits the ingredient list
-//   "donate"   → shows suggested donation + link to Every.org
 type Step = "input" | "loading" | "review" | "donate";
 
 export default function Home() {
@@ -29,11 +32,69 @@ export default function Home() {
   const [donationAmount, setDonationAmount] = useState(0);
   const [showExplanation, setShowExplanation] = useState(false);
   const [jar, setJar] = useState<JarState>({ totalCents: 0, mealCount: 0, mealsPerDay: 3 });
-  const [donateClicked, setDonateClicked] = useState(false);
+  const [historyCount, setHistoryCount] = useState(0);
+  const [offlineQueue, setOfflineQueue] = useState<QueuedMeal[]>([]);
+  const [processingQueue, setProcessingQueue] = useState(false);
 
-  // Load jar state from localStorage on mount
+  // Donation settings
+  const [donationSettings, setDonationSettingsState] = useState<DonationSettings>({ autoThresholdCents: 0, subscriptionMode: false });
+  const [showDonateModal, setShowDonateModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Recurring meals
+  const [recurringMeals, setRecurringMeals] = useState<RecurringMeal[]>([]);
+  const [lastMeal, setLastMealState] = useState<RecurringMeal | null>(null);
+
+  // Challenge
+  const [challenge, setChallenge] = useState<ChallengeProgress | null>(null);
+
+  // Error recovery — keep photo/description on failure for retry
+  const [canRetry, setCanRetry] = useState(false);
+
+  // Load all persisted state on mount
   useEffect(() => {
     setJar(getJar());
+    setHistoryCount(getHistory().length);
+    setOfflineQueue(getQueue());
+    setDonationSettingsState(getDonationSettings());
+    setRecurringMeals(getRecurringMeals());
+    setLastMealState(getLastMeal());
+    setChallenge(getChallengeProgress());
+  }, []);
+
+  // When coming back online, process queued meals
+  useEffect(() => {
+    function handleOnline() {
+      const queue = getQueue();
+      if (queue.length > 0) {
+        setOfflineQueue(queue);
+        // Inline the processing to avoid hoisting issues
+        (async () => {
+          if (!isOnline()) return;
+          setProcessingQueue(true);
+          const item = queue[0];
+          try {
+            const res = await fetch("/api/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ description: item.description, photoBase64: item.photoBase64 }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setItems(data.items);
+              dequeue(item.id);
+              setOfflineQueue(getQueue());
+              setStep("review");
+              haptic("success");
+            }
+          } catch { /* retry later */ }
+          setProcessingQueue(false);
+        })();
+      }
+    }
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hasInput = description.trim().length > 0 || photoBase64 !== null;
@@ -42,6 +103,18 @@ export default function Home() {
 
   async function handleAnalyze() {
     setError(null);
+    setCanRetry(false);
+
+    if (!isOnline()) {
+      enqueue(description, photoBase64);
+      setOfflineQueue(getQueue());
+      haptic("medium");
+      setDescription("");
+      setPhotoBase64(null);
+      setStep("input");
+      return;
+    }
+
     setStep("loading");
 
     try {
@@ -55,6 +128,7 @@ export default function Home() {
 
       if (!res.ok) {
         setError(data.error || "Something went wrong.");
+        setCanRetry(true); // Keep input for retry
         setStep("input");
         return;
       }
@@ -62,11 +136,19 @@ export default function Home() {
       setItems(data.items);
       setStep("review");
     } catch (err) {
-      const message =
-        err instanceof TypeError
-          ? "Could not connect to the server. Please check your connection."
-          : "Something went wrong analyzing your meal. Please try again.";
-      setError(message);
+      if (err instanceof TypeError) {
+        enqueue(description, photoBase64);
+        setOfflineQueue(getQueue());
+        setDescription("");
+        setPhotoBase64(null);
+        setError("You appear to be offline. Your meal has been queued and will be analyzed when you reconnect.");
+        setStep("input");
+        haptic("medium");
+        return;
+      }
+      // Error recovery: keep photo/description so user can retry
+      setError("Something went wrong analyzing your meal. Please try again.");
+      setCanRetry(true);
       setStep("input");
     }
   }
@@ -74,10 +156,31 @@ export default function Home() {
   function handleConfirm() {
     const amount = calculateOffset(items);
     setDonationAmount(amount);
-    const updatedJar = addToJar(Math.round(amount * 100));
+    const cents = Math.round(amount * 100);
+    const updatedJar = addToJar(cents);
     setJar(updatedJar);
-    setDonateClicked(false);
+    addMeal(items, cents);
+    setHistoryCount((c) => c + 1);
     setStep("donate");
+    haptic("success");
+    setCanRetry(false);
+
+    // Refresh recurring meals data
+    setRecurringMeals(getRecurringMeals());
+    setLastMealState(getLastMeal());
+    setChallenge(getChallengeProgress());
+
+    // Check auto-donate threshold
+    const settings = getDonationSettings();
+    if (settings.autoThresholdCents > 0 && updatedJar.totalCents >= settings.autoThresholdCents) {
+      setShowDonateModal(true);
+    }
+  }
+
+  function handleQuickLog(meal: RecurringMeal) {
+    haptic("light");
+    setItems(meal.items);
+    setStep("review");
   }
 
   function handleStartOver() {
@@ -87,9 +190,9 @@ export default function Home() {
     setPhotoBase64(null);
     setError(null);
     setDonationAmount(0);
-    setDonateClicked(false);
     setShowExplanation(false);
-    // Jar is NOT cleared — it persists across meals
+    setShowSettings(false);
+    setCanRetry(false);
   }
 
   function handleClearJar() {
@@ -97,11 +200,8 @@ export default function Home() {
     setJar({ totalCents: 0, mealCount: 0, mealsPerDay: 3 });
   }
 
-  function handleDonateClick() {
-    setDonateClicked(true);
-  }
-
-  function handleConfirmDonated() {
+  function handleDonationComplete() {
+    setShowDonateModal(false);
     handleClearJar();
     handleStartOver();
   }
@@ -109,41 +209,59 @@ export default function Home() {
   // ── Input screen ──────────────────────────────────────────────
   if (step === "input") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-stone-50 to-emerald-50 px-4 py-12">
-        <main className="w-full max-w-md space-y-8">
+      <div className="flex min-h-screen items-start justify-center bg-gradient-to-b from-stone-50 to-emerald-50 px-4 py-6">
+        <main className="w-full max-w-md space-y-5">
           <div className="text-center">
-            {/* Plate-as-scale logo */}
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" className="mx-auto mb-4 h-24 w-28">
-              {/* Balance beam - slightly tilted to show "offsetting" */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" className="mx-auto mb-2 h-16 w-20">
               <line x1="12" y1="26" x2="68" y2="22" stroke="#a8a29e" strokeWidth="2" strokeLinecap="round" />
-              {/* Fulcrum triangle */}
               <polygon points="40,24 35,34 45,34" fill="#a8a29e" />
-              {/* Left pan - plate with food */}
               <ellipse cx="18" cy="26" rx="14" ry="5" fill="none" stroke="#a8a29e" strokeWidth="1.5" />
-              {/* Food on left plate: drumstick */}
               <ellipse cx="15" cy="23" rx="4" ry="2.5" fill="#f59e0b" transform="rotate(-20 15 23)" />
               <line x1="19" y1="22" x2="23" y2="19" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" />
-              {/* Food on left plate: small circle (cheese/egg) */}
               <circle cx="12" cy="24" r="2" fill="#fbbf24" />
-              {/* Right pan - heart + leaf */}
               <ellipse cx="62" cy="22" rx="14" ry="5" fill="none" stroke="#a8a29e" strokeWidth="1.5" />
-              {/* Heart on right plate */}
               <path d="M62 17c-1.5-2-4-2.5-5-1s0 4 5 7c5-3 6-5.5 5-7s-3.5-1-5 1z" fill="#10b981" />
-              {/* Leaf on right plate */}
               <path d="M57 20c-2-3-1.5-5-1.5-5s3 0.5 3.5 3z" fill="#34d399" />
-              {/* Base */}
               <line x1="32" y1="34" x2="48" y2="34" stroke="#a8a29e" strokeWidth="2" strokeLinecap="round" />
-              {/* Stand */}
               <line x1="40" y1="34" x2="40" y2="40" stroke="#a8a29e" strokeWidth="2" strokeLinecap="round" />
               <line x1="33" y1="40" x2="47" y2="40" stroke="#a8a29e" strokeWidth="2.5" strokeLinecap="round" />
             </svg>
-            <h1 className="text-3xl font-bold text-stone-900">Plate2Offset</h1>
-            <p className="mt-2 text-stone-600">
-              Offset the impact of your meals on farmed animals
-              with a small donation. Log multiple meals to estimate
-              your yearly offset.
+            <h1 className="text-2xl font-bold text-stone-900">Plate2Offset</h1>
+            <p className="mt-1 text-sm text-stone-600">
+              Offset your meals&apos; impact on farmed animals with a small donation.
             </p>
           </div>
+
+          <InstallPrompt />
+
+          {/* Challenge progress banner */}
+          {challenge && challenge.active && (
+            <div className="rounded-xl bg-purple-50 px-4 py-3 ring-1 ring-purple-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-purple-800">
+                    30-Day Challenge
+                  </p>
+                  <p className="text-xs text-purple-600">
+                    {challenge.daysCompleted}/{challenge.targetDays} days completed
+                    {" "}&middot;{" "}
+                    {challenge.todayMeals}/{challenge.todayTarget} meals today
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-purple-700">
+                    {Math.round((challenge.daysCompleted / challenge.targetDays) * 100)}%
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-purple-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500 transition-all"
+                  style={{ width: `${(challenge.daysCompleted / challenge.targetDays) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {jar.mealCount > 0 && (
             <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3 ring-1 ring-emerald-200">
@@ -153,6 +271,12 @@ export default function Home() {
                 </p>
                 <p className="text-xs text-emerald-600">
                   from {jar.mealCount} {jar.mealCount === 1 ? "meal" : "meals"}
+                  {estimateYearlyOffset(jar) !== null && (
+                    <span> &middot; ~${estimateYearlyOffset(jar)!.toFixed(0)}/yr</span>
+                  )}
+                  {donationSettings.autoThresholdCents > 0 && (
+                    <span> &middot; auto at ${(donationSettings.autoThresholdCents / 100).toFixed(0)}</span>
+                  )}
                 </p>
               </div>
               <button
@@ -164,7 +288,49 @@ export default function Home() {
             </div>
           )}
 
-          <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-stone-200 space-y-6">
+          {/* Quick log: recurring meals */}
+          {(lastMeal || recurringMeals.length > 0) && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Quick log</p>
+              {lastMeal && (
+                <button
+                  onClick={() => handleQuickLog(lastMeal)}
+                  className="w-full flex items-center justify-between rounded-lg bg-white px-3 py-2.5 text-left ring-1 ring-stone-200 hover:ring-emerald-300 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-stone-900 truncate">
+                      Same as last meal
+                    </p>
+                    <p className="text-xs text-stone-400 truncate">{lastMeal.label}</p>
+                  </div>
+                  <span className="ml-2 text-xs text-emerald-600 font-medium">
+                    ${(lastMeal.offsetCents / 100).toFixed(2)}
+                  </span>
+                </button>
+              )}
+              {recurringMeals.map((meal) => (
+                <button
+                  key={meal.label}
+                  onClick={() => handleQuickLog(meal)}
+                  className="w-full flex items-center justify-between rounded-lg bg-white px-3 py-2.5 text-left ring-1 ring-stone-200 hover:ring-emerald-300 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-stone-900 truncate">
+                      {meal.label}
+                    </p>
+                    <p className="text-xs text-stone-400">
+                      logged {meal.count} times
+                    </p>
+                  </div>
+                  <span className="ml-2 text-xs text-emerald-600 font-medium">
+                    ${(meal.offsetCents / 100).toFixed(2)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200 space-y-4">
             <PhotoUpload
               photoBase64={photoBase64}
               onPhotoChange={setPhotoBase64}
@@ -172,39 +338,98 @@ export default function Home() {
 
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-stone-200" />
-              <span className="text-sm text-stone-400">and / or</span>
+              <span className="text-xs text-stone-400">and / or</span>
               <div className="h-px flex-1 bg-stone-200" />
             </div>
 
             <MealInput value={description} onChange={setDescription} />
 
             <p className="text-xs text-stone-400">
-              Tip: Describe multiple meals at once for a bigger offset.
+              Tip: multiple meals at once, or mention a restaurant for accurate portions.
             </p>
           </div>
 
+          {offlineQueue.length > 0 && (
+            <div className="rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200 space-y-1">
+              <p className="text-sm font-medium text-amber-800">
+                {offlineQueue.length} queued {offlineQueue.length === 1 ? "meal" : "meals"}
+              </p>
+              <p className="text-xs text-amber-600">
+                {isOnline()
+                  ? processingQueue
+                    ? "Processing queued meals..."
+                    : "Ready to process — tap below"
+                  : "Will be analyzed when you reconnect"}
+              </p>
+              {isOnline() && !processingQueue && (
+                <button
+                  onClick={async () => {
+                    if (offlineQueue.length === 0 || !isOnline()) return;
+                    setProcessingQueue(true);
+                    const item = offlineQueue[0];
+                    try {
+                      const res = await fetch("/api/analyze", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ description: item.description, photoBase64: item.photoBase64 }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setItems(data.items);
+                        dequeue(item.id);
+                        setOfflineQueue(getQueue());
+                        setStep("review");
+                        haptic("success");
+                      }
+                    } catch { /* retry later */ }
+                    setProcessingQueue(false);
+                  }}
+                  className="mt-1 text-xs font-medium text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                >
+                  Process now
+                </button>
+              )}
+            </div>
+          )}
+
           {error && (
-            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </p>
+            <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 space-y-2">
+              <p>{error}</p>
+              {canRetry && (
+                <button
+                  onClick={handleAnalyze}
+                  className="text-xs font-medium text-red-800 underline underline-offset-2 hover:text-red-900"
+                >
+                  Retry analysis
+                </button>
+              )}
+            </div>
           )}
 
           <button
-            disabled={!hasInput}
+            disabled={!hasInput && !canRetry}
             onClick={handleAnalyze}
             className="w-full rounded-full bg-emerald-600 px-6 py-3 text-lg font-semibold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-stone-300"
           >
-            Analyze my meal
+            {!isOnline() && hasInput ? "Queue for later" : canRetry ? "Retry analysis" : "Analyze my meal"}
           </button>
 
-          <p className="text-center">
+          <div className="flex items-center justify-center gap-4">
+            {historyCount > 0 && (
+              <Link
+                href="/history"
+                className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
+              >
+                History ({historyCount})
+              </Link>
+            )}
             <Link
               href="/about"
               className="text-sm text-stone-400 underline underline-offset-2 hover:text-stone-600"
             >
               What is this about?
             </Link>
-          </p>
+          </div>
         </main>
       </div>
     );
@@ -236,28 +461,39 @@ export default function Home() {
   // ── Donation screen ───────────────────────────────────────────
   const donateAmount = jarReady ? jarDollars : MIN_DONATION;
   const yearlyEstimate = estimateYearlyOffset(jar);
+  const frequency = donationSettings.subscriptionMode ? "MONTHLY" as const : "ONCE" as const;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-stone-50 to-emerald-50 px-4 py-12">
-      <main className="w-full max-w-md space-y-6">
+      <main className="w-full max-w-md space-y-4">
+        {/* Donate Modal */}
+        {showDonateModal && (
+          <DonateModal
+            amount={donateAmount}
+            frequency={frequency}
+            onClose={() => setShowDonateModal(false)}
+            onDonationComplete={handleDonationComplete}
+          />
+        )}
+
         <div className="text-center">
           <h2 className="text-2xl font-bold text-stone-900">
             {jarReady ? "Ready to donate" : "Added to your jar"}
           </h2>
           <p className="mt-1 text-stone-600">
-            {jarReady
-              ? "Your offset jar has reached a donatable amount."
-              : "Keep logging meals to build up your offset."}
+            {donationSettings.autoThresholdCents > 0 && jar.totalCents >= donationSettings.autoThresholdCents
+              ? "Your jar hit the auto-donate threshold!"
+              : jarReady
+                ? "Your offset jar has reached a donatable amount."
+                : "Keep logging meals to build up your offset."}
           </p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-sm ring-1 ring-stone-200 text-center space-y-4">
-          {/* This meal amount */}
+        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-stone-200 text-center space-y-3">
           <p className="text-sm text-stone-500">
             This meal: <span className="font-medium text-stone-700">${donationAmount.toFixed(2)}</span>
           </p>
 
-          {/* Jar total — the main number */}
           <p className="text-5xl font-bold text-emerald-600">
             ${jarDollars.toFixed(2)}
           </p>
@@ -283,6 +519,9 @@ export default function Home() {
             <div className="pt-2 space-y-1">
               <p className="text-xs text-stone-400">
                 Yearly estimate: <span className="font-medium text-stone-600">~${yearlyEstimate.toFixed(2)}</span>
+                {donationSettings.subscriptionMode && (
+                  <span className="text-emerald-600"> (monthly)</span>
+                )}
               </p>
               <div className="flex items-center justify-center gap-1.5 text-xs text-stone-400">
                 <span>if you eat</span>
@@ -294,11 +533,9 @@ export default function Home() {
                   }}
                   className="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-xs text-stone-600"
                 >
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                  <option value={4}>4</option>
-                  <option value={5}>5</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
                 </select>
                 <span>meals per day</span>
               </div>
@@ -307,52 +544,104 @@ export default function Home() {
         </div>
 
         <div className="space-y-3">
-          {donateClicked ? (
-            <div className="rounded-2xl bg-emerald-50 p-6 ring-1 ring-emerald-200 space-y-4 text-center">
-              <p className="font-medium text-stone-900">
-                Did you complete the donation?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={handleConfirmDonated}
-                  className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
-                >
-                  Yes, clear my jar
-                </button>
-                <button
-                  onClick={() => setDonateClicked(false)}
-                  className="flex-1 rounded-full border border-stone-300 px-4 py-3 text-sm text-stone-700 transition-colors hover:bg-stone-100"
-                >
-                  Not yet
-                </button>
-              </div>
-            </div>
-          ) : (
-            <>
-              <a
-                href={buildDonateLink(donateAmount)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleDonateClick}
-                className="block w-full rounded-full bg-emerald-600 px-6 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-emerald-700"
-              >
-                Donate ${donateAmount.toFixed(2)} via Every.org
-              </a>
+          {/* Primary donate actions */}
+          <button
+            onClick={() => setShowDonateModal(true)}
+            className="w-full rounded-full bg-emerald-600 px-6 py-3 text-lg font-semibold text-white transition-colors hover:bg-emerald-700"
+          >
+            Donate ${donateAmount.toFixed(2)} {donationSettings.subscriptionMode ? "monthly" : ""} via Every.org
+          </button>
 
-              {!jarReady && (
-                <p className="text-center text-xs text-stone-400">
-                  The minimum donation on Every.org is ${MIN_DONATION.toFixed(2)}.
-                </p>
-              )}
-            </>
+          {/* Secondary links row */}
+          <div className="flex items-center justify-center gap-3 text-xs text-stone-400">
+            <a
+              href={buildDonateLink(donateAmount, frequency)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-stone-600"
+            >
+              Open in new tab
+            </a>
+            <span>&middot;</span>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="underline underline-offset-2 hover:text-stone-600"
+            >
+              {showSettings ? "Hide settings" : "Settings"}
+            </button>
+            <span>&middot;</span>
+            <button
+              onClick={() => setShowExplanation(!showExplanation)}
+              className="underline underline-offset-2 hover:text-stone-600"
+            >
+              {showExplanation ? "Hide math" : "How calculated?"}
+            </button>
+          </div>
+
+          {!jarReady && (
+            <p className="text-center text-xs text-stone-400">
+              Minimum donation on Every.org is ${MIN_DONATION.toFixed(2)}.
+            </p>
           )}
 
-          <button
-            onClick={() => setShowExplanation(!showExplanation)}
-            className="w-full text-center text-sm text-stone-500 underline underline-offset-2 hover:text-stone-700"
-          >
-            {showExplanation ? "Hide explanation" : "How is this calculated?"}
-          </button>
+          {showSettings && (
+            <div className="rounded-xl bg-stone-100 px-5 py-4 space-y-4">
+              {/* Auto-donate threshold */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-stone-700">
+                  Auto-donate when jar reaches:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {THRESHOLD_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        const updated = setAutoThreshold(opt.value);
+                        setDonationSettingsState(updated);
+                        haptic("light");
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                        donationSettings.autoThresholdCents === opt.value * 100
+                          ? "bg-emerald-600 text-white"
+                          : "bg-white text-stone-600 ring-1 ring-stone-200 hover:ring-emerald-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-stone-400">
+                  {donationSettings.autoThresholdCents > 0
+                    ? `The donation modal will pop up automatically when your jar hits $${(donationSettings.autoThresholdCents / 100).toFixed(0)}.`
+                    : "Disabled — you'll donate manually whenever you want."}
+                </p>
+              </div>
+
+              {/* Subscription mode */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={donationSettings.subscriptionMode}
+                    onChange={(e) => {
+                      const updated = setSubscriptionMode(e.target.checked);
+                      setDonationSettingsState(updated);
+                      haptic("light");
+                    }}
+                    className="h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm font-medium text-stone-700">
+                    Monthly recurring donation
+                  </span>
+                </label>
+                <p className="text-xs text-stone-400 ml-7">
+                  {donationSettings.subscriptionMode
+                    ? `Your average monthly offset is ~$${yearlyEstimate ? (yearlyEstimate / 12).toFixed(2) : "0.00"}. Every.org will set up a recurring donation.`
+                    : "One-time donations. Enable this to set up automatic monthly giving based on your average offset."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {showExplanation && (
             <div className="rounded-xl bg-stone-100 px-5 py-4 text-sm text-stone-600 space-y-4">
@@ -403,6 +692,13 @@ export default function Home() {
           >
             Log another meal
           </button>
+
+          <Link
+            href="/history"
+            className="block w-full text-center text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700 font-medium"
+          >
+            View meal history
+          </Link>
         </div>
 
         <p className="text-center text-xs text-stone-400">
