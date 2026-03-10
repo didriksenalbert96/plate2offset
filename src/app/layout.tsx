@@ -42,6 +42,22 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                if (window.parent === window) return;
+                function postHeight() {
+                  var h = document.documentElement.scrollHeight;
+                  window.parent.postMessage({ type: 'plate2offset-height', height: h }, '*');
+                }
+                var ro = new ResizeObserver(postHeight);
+                ro.observe(document.documentElement);
+                postHeight();
+              })();
+            `,
+          }}
+        />
       </body>
     </html>
   );
