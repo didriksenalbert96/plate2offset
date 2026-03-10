@@ -14,6 +14,7 @@ const CATEGORIES: { value: Category; label: string }[] = [
 ];
 
 const UNITS: Unit[] = ["g", "oz", "ml", "cups", "pieces", "servings"];
+const MAX_AMOUNT = 10000;
 
 interface ReviewScreenProps {
   items: MealItem[];
@@ -53,10 +54,11 @@ export default function ReviewScreen({
     if (editingIndex === null) return;
     const updated = [...items];
     const parsed = parseFloat(editAmount);
+    const clampedAmount = parsed > 0 ? Math.min(parsed, MAX_AMOUNT) : updated[editingIndex].amount;
     updated[editingIndex] = {
       ...updated[editingIndex],
       name: editName.trim() || updated[editingIndex].name,
-      amount: parsed > 0 ? parsed : updated[editingIndex].amount,
+      amount: clampedAmount,
       unit: editUnit,
       category: editCategory,
     };
@@ -78,7 +80,7 @@ export default function ReviewScreen({
     const parsed = parseFloat(editAmount);
     const newItem: MealItem = {
       name: editName.trim(),
-      amount: parsed > 0 ? parsed : 1,
+      amount: parsed > 0 ? Math.min(parsed, MAX_AMOUNT) : 1,
       unit: editUnit,
       category: editCategory,
       confidence: 1,

@@ -10,6 +10,8 @@ import Link from "next/link";
 import { calculateOffset, itemContribution } from "@/lib/calculate-offset";
 import { buildDonateLink } from "@/lib/donate-link";
 
+const MIN_DONATION = 0.5;
+
 // The app has four screens, shown one at a time:
 //   "input"    → user types a description or uploads a photo
 //   "loading"  → spinner while AI analyzes
@@ -49,14 +51,14 @@ export default function Home() {
 
       setItems(data.items);
       setStep("review");
-    } catch {
-      setError("Could not connect to the server. Please try again.");
+    } catch (err) {
+      const message =
+        err instanceof TypeError
+          ? "Could not connect to the server. Please check your connection."
+          : "Something went wrong analyzing your meal. Please try again.";
+      setError(message);
       setStep("input");
     }
-  }
-
-  function handleRemoveItem(index: number) {
-    setItems(items.filter((_, i) => i !== index));
   }
 
   function handleConfirm() {
@@ -198,7 +200,7 @@ export default function Home() {
           <p className="text-sm text-stone-500">
             This is just a suggestion. Donate any amount you&apos;re comfortable with.
           </p>
-          {donationAmount < 0.5 && (
+          {donationAmount < MIN_DONATION && (
             <p className="text-sm text-stone-400">
               Note: Every.org has a minimum donation of $0.50.
             </p>
@@ -207,7 +209,7 @@ export default function Home() {
 
         <div className="space-y-3">
           <a
-            href={buildDonateLink(Math.max(0.5, donationAmount))}
+            href={buildDonateLink(Math.max(MIN_DONATION, donationAmount))}
             target="_blank"
             rel="noopener noreferrer"
             className="block w-full rounded-full bg-emerald-600 px-6 py-3 text-center text-lg font-semibold text-white transition-colors hover:bg-emerald-700"

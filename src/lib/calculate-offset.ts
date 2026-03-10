@@ -5,7 +5,7 @@
  *   1. For each ingredient, convert amount to grams (if needed)
  *   2. Multiply grams × cents-per-gram for that category
  *   3. Add them all up
- *   4. Round to the nearest $0.50 (minimum $0.50)
+ *   4. Round to the nearest cent
  *
  * Returns the donation amount in dollars (e.g. 2.50).
  */
@@ -41,15 +41,11 @@ export function itemContribution(item: MealItem): number {
 }
 
 export function calculateOffset(items: MealItem[]): number {
-  let totalCents = 0;
-
-  for (const item of items) {
-    const grams = toGrams(item.amount, item.unit);
-    const rate = CENTS_PER_GRAM[item.category] ?? 0;
-    totalCents += grams * rate;
-  }
+  const totalCents = items.reduce(
+    (sum, item) => sum + itemContribution(item) * 100,
+    0,
+  );
 
   // Convert cents to dollars, round to nearest cent
-  const dollars = Math.round(totalCents) / 100;
-  return dollars;
+  return Math.round(totalCents) / 100;
 }

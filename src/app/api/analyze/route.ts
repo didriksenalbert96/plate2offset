@@ -6,6 +6,17 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const MODEL_IMAGE = "claude-sonnet-4-6";
+const MODEL_TEXT = "claude-haiku-4-5-20251001";
+
+const ALLOWED_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+]);
+type AllowedMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
 const SYSTEM_PROMPT = `You are a meal ingredient analyzer. Given a meal description or photo, identify ALL ingredients you can see or infer.
 
 For each ingredient, return:
@@ -64,16 +75,20 @@ export async function POST(request: NextRequest) {
     // photoBase64 is a data URL like "data:image/jpeg;base64,/9j/4AAQ..."
     // Claude needs the base64 data and media type separately
     const match = photoBase64.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (match) {
-      userContent.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-          data: match[2],
-        },
-      });
+    if (!match || !ALLOWED_MEDIA_TYPES.has(match[1])) {
+      return NextResponse.json(
+        { error: "Unsupported image format. Please upload a JPEG, PNG, GIF, or WebP image." },
+        { status: 400 },
+      );
     }
+    userContent.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: match[1] as AllowedMediaType,
+        data: match[2],
+      },
+    });
   }
 
   if (description) {
@@ -90,7 +105,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const response = await anthropic.messages.create({
-      model: photoBase64 ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
+      model: photoBase64 ? MODEL_IMAGE : MODEL_TEXT,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],

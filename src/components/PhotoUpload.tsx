@@ -1,5 +1,8 @@
 import { useRef } from "react";
 
+const IMAGE_MAX_SIZE = 768;
+const IMAGE_QUALITY = 0.8;
+
 interface PhotoUploadProps {
   photoBase64: string | null;
   onPhotoChange: (base64: string | null) => void;
@@ -37,7 +40,7 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
         return;
       }
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL("image/jpeg", 0.8));
+      resolve(canvas.toDataURL("image/jpeg", IMAGE_QUALITY));
     };
 
     img.onerror = () => {
@@ -54,7 +57,7 @@ export default function PhotoUpload({ photoBase64, onPhotoChange }: PhotoUploadP
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
-    const base64 = await resizeImage(file, 768);
+    const base64 = await resizeImage(file, IMAGE_MAX_SIZE);
     onPhotoChange(base64);
   }
 

@@ -40,7 +40,7 @@ export interface MealItem {
   confidence: number;
 }
 
-/** The JSON shape returned by the OpenAI Structured Outputs call. */
+/** The JSON shape returned by the Claude API call. */
 export interface AnalyzeResponse {
   /** List of identified ingredients */
   items: MealItem[];
