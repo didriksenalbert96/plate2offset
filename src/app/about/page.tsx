@@ -51,6 +51,13 @@ export default function AboutPage() {
             Plate2Offset is not affiliated with FarmKind or Every.org.
             Donations go directly to FarmKind through Every.org's platform.
           </p>
+
+          <p className="text-stone-500 text-sm">
+            <span className="font-medium text-stone-600">Privacy:</span> If
+            you upload a photo or type a description, it gets sent to OpenAI
+            for analysis. We don't store your photos, descriptions, or
+            results. Nothing is saved after you close the page.
+          </p>
         </div>
 
         <Link
