@@ -18,6 +18,8 @@ import { getDonationSettings, setAutoThreshold, setSubscriptionMode, THRESHOLD_O
 import { getRecurringMeals, getLastMeal, type RecurringMeal } from "@/lib/recurring-meals";
 import { getChallengeProgress, type ChallengeProgress } from "@/lib/challenge";
 import InstallPrompt from "@/components/InstallPrompt";
+import ShareCard from "@/components/ShareCard";
+import { getStreakInfo } from "@/lib/meal-history";
 
 const MIN_DONATION = 0.5;
 
@@ -680,6 +682,20 @@ export default function Home() {
           >
             Log another meal
           </button>
+
+          {/* Share your impact */}
+          <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-200 space-y-3">
+            <p className="text-sm font-medium text-stone-700 text-center">
+              Spread the word
+            </p>
+            <ShareCard
+              totalMeals={jar.mealCount}
+              totalOffsetDollars={jarDollars}
+              currentStreak={getStreakInfo(getHistory()).currentStreak}
+              monthLabel={new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              compact
+            />
+          </div>
 
           <Link
             href="/history"
