@@ -37,10 +37,13 @@ const requestLog = new Map<string, number[]>();
 
 async function isRateLimited(ip: string): Promise<boolean> {
   if (ratelimit) {
-    const { success } = await ratelimit.limit(ip);
-    return !success;
+    try {
+      const { success } = await ratelimit.limit(ip);
+      return !success;
+    } catch {
+      // Redis unavailable — fall through to in-memory
+    }
   }
-  // Fallback: in-memory
   const now = Date.now();
   const timestamps = requestLog.get(ip) ?? [];
   const recent = timestamps.filter((t) => now - t < 60_000);
